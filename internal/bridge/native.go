@@ -81,22 +81,33 @@ type nativeRequest struct {
 	soundDirective                  *soundDirective
 	soundSealed                     bool
 	expires                         *time.Timer
+	// Proactive announcements have no client request: they live only in
+	// Native.tts and Native.announcements, and request stays nil-safe.
+	announcement bool
+	speaking     chan struct{} // closed when upstream TtsSpeak is accepted
+	speakingSeen bool
 }
 type Native struct {
-	connectionScope  string
-	ctx              context.Context
-	cancel           context.CancelFunc
-	up, down         Sender
-	resolver         Resolver
-	mu               sync.Mutex
-	requests         map[string]*nativeRequest
-	tts              map[string]*nativeRequest
-	streams          map[uint32]*nativeRequest
-	blocked          map[uint32]*nativeRequest
-	wg               sync.WaitGroup
-	OnRoute          func(id, route string)
-	GateText         bool
-	ShouldListen     bool
+	connectionScope string
+	ctx             context.Context
+	cancel          context.CancelFunc
+	up, down        Sender
+	resolver        Resolver
+	mu              sync.Mutex
+	requests        map[string]*nativeRequest
+	tts             map[string]*nativeRequest
+	streams         map[uint32]*nativeRequest
+	blocked         map[uint32]*nativeRequest
+	announcements   map[string]*nativeRequest // by TTS id
+	announcing      bool                      // an Announce call is waiting for speech to start
+	registry        *SessionRegistry
+	speakerScope    string // dialogue scope of the latest client request
+	wg              sync.WaitGroup
+	OnRoute         func(id, route string)
+	GateText        bool
+	ShouldListen    bool
+	// TTSMarkup keeps Alice TTS markup in announcement speech; otherwise it is stripped.
+	TTSMarkup        bool
 	DecisionDelay    time.Duration
 	ProgressAfter    time.Duration
 	ProgressInterval time.Duration
@@ -104,17 +115,24 @@ type Native struct {
 
 func NewNative(ctx context.Context, up, down Sender, resolver Resolver) *Native {
 	ctx, cancel := context.WithCancel(ctx)
-	return &Native{connectionScope: newID(), ctx: ctx, cancel: cancel, up: up, down: down, resolver: resolver, ShouldListen: true, requests: map[string]*nativeRequest{}, tts: map[string]*nativeRequest{}, streams: map[uint32]*nativeRequest{}, blocked: map[uint32]*nativeRequest{}}
+	return &Native{connectionScope: newID(), ctx: ctx, cancel: cancel, up: up, down: down, resolver: resolver, ShouldListen: true, requests: map[string]*nativeRequest{}, tts: map[string]*nativeRequest{}, streams: map[uint32]*nativeRequest{}, blocked: map[uint32]*nativeRequest{}, announcements: map[string]*nativeRequest{}}
 }
 func (n *Native) Close() {
 	n.cancel()
 	n.mu.Lock()
+	registry := n.registry
 	for _, p := range n.requests {
 		p.canceled = true
 		p.cancel()
 		p.expires.Stop()
 	}
+	for _, p := range n.announcements {
+		n.dropAnnouncementLocked(p)
+	}
 	n.mu.Unlock()
+	if registry != nil {
+		registry.Unregister(n)
+	}
 	n.wg.Wait()
 }
 func (n *Native) Client(ctx context.Context, k websocket.MessageType, data []byte) error {
@@ -177,6 +195,7 @@ func (n *Native) Client(ctx context.Context, k websocket.MessageType, data []byt
 
 		slog.Info("native_request_shape", "request", requestTag(id), "text_bytes", len(p.text), "event_type", req.GetRequest().GetEvent().GetType().String(), "stream", e.GetHeader().GetStreamId(), "unknown_request_bytes", len(req.ProtoReflect().GetUnknown()), "payload_bytes", len(req.GetRequest().GetEvent().GetPayloadRaw()))
 		n.mu.Lock()
+		n.speakerScope = scope
 		if n.requests[id] != nil {
 			n.mu.Unlock()
 			cancel()
@@ -400,6 +419,10 @@ func (n *Native) Server(ctx context.Context, k websocket.MessageType, data []byt
 	}
 	if isTTS {
 		if p.canceled {
+			if p.announcement && e.GetTtsSpeak() != nil {
+				// A failed announcement must stay silent even if upstream answers late.
+				n.blocked[uint32(e.GetHeader().GetStreamId())] = p
+			}
 			n.mu.Unlock()
 			return nil
 		}
@@ -410,6 +433,10 @@ func (n *Native) Server(ctx context.Context, k websocket.MessageType, data []byt
 		}
 		if e.GetTtsSpeak() != nil {
 			n.streams[uint32(e.Header.GetStreamId())] = p
+			if p.speaking != nil && !p.speakingSeen && ((!p.streaming && !p.markedTTS) || e.GetTtsSpeak().GetFormat() == "audio/opus") {
+				p.speakingSeen = true
+				close(p.speaking)
+			}
 			if p.streaming || p.markedTTS {
 				if e.GetTtsSpeak().GetFormat() != "audio/opus" {
 					p.cancel()
