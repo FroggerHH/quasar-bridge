@@ -25,32 +25,33 @@ type progressConfig struct {
 }
 
 type config struct {
-	AirPlay            airPlayConfig        `json:"airplay"`
-	DialogueContext    dialogue.Config      `json:"dialogue_context"`
-	LocalProgress      progressConfig       `json:"local_progress"`
-	AssistantTools     assistant.Config     `json:"assistant_tools"`
-	ConversationLog    journal.Config       `json:"conversation_log"`
-	Listen             string               `json:"listen"`
-	Upstream           string               `json:"upstream"`
-	TLSCert            string               `json:"tls_cert"`
-	TLSKey             string               `json:"tls_key"`
-	AllowedIPs         []string             `json:"allowed_ips"`
-	Mode               string               `json:"mode"`
-	LLMBaseURL         string               `json:"llm_base_url"`
-	LLMModel           string               `json:"llm_model"`
-	LLMAPI             string               `json:"llm_api"`
-	LLMChatGPTAuthFile string               `json:"llm_chatgpt_auth_file"`
-	LLMReasoningEffort string               `json:"llm_reasoning_effort"`
-	LLMMaxOutputTokens int                  `json:"llm_max_output_tokens"`
-	LLMHostedTools     []string             `json:"llm_hosted_tools"`
-	LLMChatParameters  map[string]any       `json:"llm_chat_parameters"`
-	LLMStripPrefixes   []string             `json:"llm_strip_prefixes"`
-	LLMTTSMarkup        bool                 `json:"llm_tts_markup"`
-	LLMSystemPrompt     string               `json:"llm_system_prompt"`
-	LLMSystemPromptFile string               `json:"llm_system_prompt_file"`
-	HomeWarmArea        string               `json:"home_warm_area"`
-	ListenAfterReply   bool                 `json:"listen_after_reply"`
-	Routing            bridge.RoutingConfig `json:"routing"`
+	AirPlay             airPlayConfig             `json:"airplay"`
+	DialogueContext     dialogue.Config           `json:"dialogue_context"`
+	LocalProgress       progressConfig            `json:"local_progress"`
+	AssistantTools      assistant.Config          `json:"assistant_tools"`
+	ConversationLog     journal.Config            `json:"conversation_log"`
+	Listen              string                    `json:"listen"`
+	Upstream            string                    `json:"upstream"`
+	TLSCert             string                    `json:"tls_cert"`
+	TLSKey              string                    `json:"tls_key"`
+	AllowedIPs          []string                  `json:"allowed_ips"`
+	Mode                string                    `json:"mode"`
+	LLMBaseURL          string                    `json:"llm_base_url"`
+	LLMModel            string                    `json:"llm_model"`
+	LLMAPI              string                    `json:"llm_api"`
+	LLMChatGPTAuthFile  string                    `json:"llm_chatgpt_auth_file"`
+	LLMReasoningEffort  string                    `json:"llm_reasoning_effort"`
+	LLMMaxOutputTokens  int                       `json:"llm_max_output_tokens"`
+	LLMHostedTools      []string                  `json:"llm_hosted_tools"`
+	LLMChatParameters   map[string]any            `json:"llm_chat_parameters"`
+	LLMStripPrefixes    []string                  `json:"llm_strip_prefixes"`
+	LLMModelRouting     bridge.ModelRoutingConfig `json:"llm_model_routing"`
+	LLMTTSMarkup        bool                      `json:"llm_tts_markup"`
+	LLMSystemPrompt     string                    `json:"llm_system_prompt"`
+	LLMSystemPromptFile string                    `json:"llm_system_prompt_file"`
+	HomeWarmArea        string                    `json:"home_warm_area"`
+	ListenAfterReply    bool                      `json:"listen_after_reply"`
+	Routing             bridge.RoutingConfig      `json:"routing"`
 }
 
 func readConfig(path string) (config, error) {
@@ -68,7 +69,7 @@ func readConfigForCommand(path string, modelOptional bool) (config, error) {
 }
 
 func parseConfig(raw []byte, modelOptional bool) (config, error) {
-	cfg := config{DialogueContext: dialogue.DefaultConfig(), Routing: bridge.DefaultRoutingConfig(), ConversationLog: journal.DefaultConfig(), AssistantTools: assistant.DefaultConfig(), LocalProgress: progressConfig{AfterMS: 2000, IntervalMS: 4000}, LLMAPI: "chat_completions", LLMMaxOutputTokens: 4096, ListenAfterReply: true, LLMStripPrefixes: bridge.DefaultStripPrefixes(), LLMTTSMarkup: true}
+	cfg := config{DialogueContext: dialogue.DefaultConfig(), Routing: bridge.DefaultRoutingConfig(), ConversationLog: journal.DefaultConfig(), AssistantTools: assistant.DefaultConfig(), LocalProgress: progressConfig{AfterMS: 2000, IntervalMS: 4000}, LLMAPI: "chat_completions", LLMMaxOutputTokens: 4096, ListenAfterReply: true, LLMStripPrefixes: bridge.DefaultStripPrefixes(), LLMModelRouting: bridge.DefaultModelRoutingConfig(), LLMTTSMarkup: true}
 	if json.Unmarshal(raw, &cfg, json.RejectUnknownMembers(true)) != nil {
 		return cfg, errors.New("invalid configuration JSON")
 	}
@@ -221,6 +222,9 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 		return cfg, err
 	}
 	if _, err := bridge.CompileRouting(cfg.Routing); err != nil {
+		return cfg, err
+	}
+	if err := cfg.LLMModelRouting.Validate(); err != nil {
 		return cfg, err
 	}
 	return cfg, nil

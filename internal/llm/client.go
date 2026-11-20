@@ -123,7 +123,7 @@ func (c *Client) chat(ctx context.Context, messages []Message, structured bool, 
 
 func (c *Client) chatCompletions(ctx context.Context, messages []Message, structured bool, tools []Tool) (Message, error) {
 	request := map[string]any{
-		"model": c.Model, "messages": messages, "stream": false,
+		"model": c.modelFor(ctx), "messages": messages, "stream": false,
 		"temperature": 0, "max_tokens": 1024,
 		"chat_template_kwargs": map[string]any{"enable_thinking": false},
 	}

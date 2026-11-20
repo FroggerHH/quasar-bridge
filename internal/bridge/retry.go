@@ -70,6 +70,8 @@ func (e *Engine) retryQuestion(ctx context.Context, ticket dialogue.Ticket) (Res
 	messages = append(messages, replay.Messages...)
 	messages = append(messages, llm.Message{Role: "user", Content: replay.Question})
 	messages = e.modelMessages(messages)
+	// Select after the safety guard so the guard keeps the default model.
+	ctx = e.withSelectedModel(ctx, replay.Question)
 	var answer string
 	if reader, ok := e.Assistant.(interface {
 		CompleteConfiguration(context.Context, []llm.Message) (string, error)

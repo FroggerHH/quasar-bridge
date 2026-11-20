@@ -22,6 +22,8 @@ func applyReload(next, initial config, engine *bridge.Engine, logs ...*journal.W
 	a, b := initial, next
 	a.Routing = bridge.RoutingConfig{}
 	b.Routing = bridge.RoutingConfig{}
+	a.LLMModelRouting = bridge.ModelRoutingConfig{}
+	b.LLMModelRouting = bridge.ModelRoutingConfig{}
 	a.LLMSystemPrompt = ""
 	b.LLMSystemPrompt = ""
 	a.LLMSystemPromptFile = ""
@@ -43,6 +45,10 @@ func applyReload(next, initial config, engine *bridge.Engine, logs ...*journal.W
 		}
 	}
 	if err := engine.SetRouting(next.Routing); err != nil {
+		return err
+	}
+	// llm_model itself needs a restart, so the fast model is the initial one.
+	if err := engine.SetModelRouting(next.LLMModelRouting, initial.LLMModel); err != nil {
 		return err
 	}
 	engine.SetSystemPrompt(prompt)

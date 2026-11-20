@@ -51,6 +51,7 @@ type Engine struct {
 	dialogueOnce  sync.Once
 	routing       atomic.Pointer[RoutingPolicy]
 	systemPrompt  atomic.Pointer[string]
+	modelRouter   atomic.Pointer[ModelRouter]
 }
 
 func (e *Engine) SetSystemPrompt(prompt string) {
@@ -207,6 +208,7 @@ func (e *Engine) Fallback(ctx context.Context, text string) (Resolution, error) 
 	if !e.dialogue().Current(ctx, ticket) {
 		return r, context.Canceled
 	}
+	ctx = e.withSelectedModel(ctx, text)
 	sysPrompt := e.activeSystemPrompt()
 	if sysPrompt == "" {
 		sysPrompt = "Ты голосовой помощник пользователя. Отвечай по-русски, кратко и по существу, обычно до трёх предложений. Ответ будет прочитан вслух: без Markdown и служебных рассуждений. Выполняй внешние действия только доступными инструментами по явному запросу пользователя. Не заявляй о выполнении действий без успешного результата инструмента; если инструмента нет, прямо скажи об этом. Для Home Assistant есть отдельный обработчик умного дома." + e.ttsInstructions()

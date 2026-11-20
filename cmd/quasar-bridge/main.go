@@ -274,6 +274,10 @@ func main() {
 		slog.Error("routing rejected", "error", err)
 		os.Exit(1)
 	}
+	if err := engine.SetModelRouting(cfg.LLMModelRouting, cfg.LLMModel); err != nil {
+		slog.Error("llm_model_routing rejected", "error", err)
+		os.Exit(1)
+	}
 	if *query != "" || *check || *route != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 75*time.Second)
 		defer cancel()
