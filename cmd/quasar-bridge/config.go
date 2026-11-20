@@ -45,8 +45,10 @@ type config struct {
 	LLMHostedTools     []string             `json:"llm_hosted_tools"`
 	LLMChatParameters  map[string]any       `json:"llm_chat_parameters"`
 	LLMStripPrefixes   []string             `json:"llm_strip_prefixes"`
-	LLMTTSMarkup       bool                 `json:"llm_tts_markup"`
-	HomeWarmArea       string               `json:"home_warm_area"`
+	LLMTTSMarkup        bool                 `json:"llm_tts_markup"`
+	LLMSystemPrompt     string               `json:"llm_system_prompt"`
+	LLMSystemPromptFile string               `json:"llm_system_prompt_file"`
+	HomeWarmArea        string               `json:"home_warm_area"`
 	ListenAfterReply   bool                 `json:"listen_after_reply"`
 	Routing            bridge.RoutingConfig `json:"routing"`
 }
@@ -215,10 +217,32 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 	if _, err := cfg.AirPlay.receiverConfig(); err != nil {
 		return cfg, err
 	}
+	if _, err := cfg.resolveSystemPrompt(); err != nil {
+		return cfg, err
+	}
 	if _, err := bridge.CompileRouting(cfg.Routing); err != nil {
 		return cfg, err
 	}
 	return cfg, nil
+}
+func (c config) resolveSystemPrompt() (string, error) {
+	inline := strings.TrimSpace(c.LLMSystemPrompt)
+	file := strings.TrimSpace(c.LLMSystemPromptFile)
+	if inline != "" && file != "" {
+		return "", errors.New("llm_system_prompt and llm_system_prompt_file are mutually exclusive")
+	}
+	if file != "" {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			return "", errors.New("cannot read llm_system_prompt_file")
+		}
+		prompt := strings.TrimSpace(string(raw))
+		if prompt == "" {
+			return "", errors.New("llm_system_prompt_file is empty")
+		}
+		return prompt, nil
+	}
+	return inline, nil
 }
 func validEndpoint(raw string, schemes ...string) bool {
 	u, err := url.Parse(raw)

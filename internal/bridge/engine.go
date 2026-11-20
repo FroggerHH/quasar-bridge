@@ -42,11 +42,27 @@ type Engine struct {
 	Music         MusicStarter
 	Dialogue      *dialogue.Store
 	TTSMarkup     bool
+	// SystemPrompt overrides the built-in Russian prompt and ttsMarkupPrompt
+	// when non-empty while keeping TTSMarkup tag passthrough intact.
+	SystemPrompt string
 	// StripPrefixes are model addresses removed only from outbound requests.
 	// An empty list disables stripping.
 	StripPrefixes []string
 	dialogueOnce  sync.Once
 	routing       atomic.Pointer[RoutingPolicy]
+	systemPrompt  atomic.Pointer[string]
+}
+
+func (e *Engine) SetSystemPrompt(prompt string) {
+	p := strings.TrimSpace(prompt)
+	e.systemPrompt.Store(&p)
+}
+
+func (e *Engine) activeSystemPrompt() string {
+	if p := e.systemPrompt.Load(); p != nil {
+		return *p
+	}
+	return strings.TrimSpace(e.SystemPrompt)
 }
 
 func (e *Engine) dialogue() *dialogue.Store {
@@ -191,7 +207,11 @@ func (e *Engine) Fallback(ctx context.Context, text string) (Resolution, error) 
 	if !e.dialogue().Current(ctx, ticket) {
 		return r, context.Canceled
 	}
-	messages := []llm.Message{{Role: "system", Content: "Ты голосовой помощник пользователя. Отвечай по-русски, кратко и по существу, обычно до трёх предложений. Ответ будет прочитан вслух: без Markdown и служебных рассуждений. Выполняй внешние действия только доступными инструментами по явному запросу пользователя. Не заявляй о выполнении действий без успешного результата инструмента; если инструмента нет, прямо скажи об этом. Для Home Assistant есть отдельный обработчик умного дома." + e.ttsInstructions()}}
+	sysPrompt := e.activeSystemPrompt()
+	if sysPrompt == "" {
+		sysPrompt = "Ты голосовой помощник пользователя. Отвечай по-русски, кратко и по существу, обычно до трёх предложений. Ответ будет прочитан вслух: без Markdown и служебных рассуждений. Выполняй внешние действия только доступными инструментами по явному запросу пользователя. Не заявляй о выполнении действий без успешного результата инструмента; если инструмента нет, прямо скажи об этом. Для Home Assistant есть отдельный обработчик умного дома." + e.ttsInstructions()
+	}
+	messages := []llm.Message{{Role: "system", Content: sysPrompt}}
 	messages = append(messages, snapshot.Messages...)
 	messages = append(messages, llm.Message{Role: "user", Content: text})
 	messages = e.modelMessages(messages)
