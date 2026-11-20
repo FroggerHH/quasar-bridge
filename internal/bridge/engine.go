@@ -48,10 +48,13 @@ type Engine struct {
 	// StripPrefixes are model addresses removed only from outbound requests.
 	// An empty list disables stripping.
 	StripPrefixes []string
-	dialogueOnce  sync.Once
-	routing       atomic.Pointer[RoutingPolicy]
-	systemPrompt  atomic.Pointer[string]
-	modelRouter   atomic.Pointer[ModelRouter]
+	// PostTurnHook is notified of delivered llm and home turns. nil disables it;
+	// the owner closes it on shutdown.
+	PostTurnHook *PostTurnHook
+	dialogueOnce sync.Once
+	routing      atomic.Pointer[RoutingPolicy]
+	systemPrompt atomic.Pointer[string]
+	modelRouter  atomic.Pointer[ModelRouter]
 }
 
 func (e *Engine) SetSystemPrompt(prompt string) {

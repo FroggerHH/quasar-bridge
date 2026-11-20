@@ -26,12 +26,15 @@ func isRetryCommand(text string) bool {
 
 // RecordDelivered retains text only, never tool results, audio or device IDs.
 // Native invokes it after its actual sender succeeds, outside the native mutex.
-func (e *Engine) RecordDelivered(ctx context.Context, question, answer string, final, action bool) {
+// A completed llm or home turn is also queued for the optional post-turn hook;
+// that never waits for the hook endpoint.
+func (e *Engine) RecordDelivered(ctx context.Context, route, question, answer string, final, action bool) {
 	ctx, view, ticket := e.dialogue().Start(ctx)
 	if dialogue.IsReset(question) {
 		action = true
 	}
 	e.dialogue().CaptureReplay(ctx, ticket, question, answer, final, action, view.PrivateHistory, isRetryCommand(question))
+	e.PostTurnHook.Notify(ctx, route, question, answer, final)
 }
 
 // EmptyInput is called only for a successful final ASR result with no words.

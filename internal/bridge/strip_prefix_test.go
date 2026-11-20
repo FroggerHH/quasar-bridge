@@ -176,9 +176,9 @@ func TestRetryNormalizesHistoryAndPreservesStandaloneCommand(t *testing.T) {
 			}
 			ctx := dialogue.WithSpeaker(t.Context(), "prefix-retry")
 			first := e.Prepare(ctx)
-			e.RecordDelivered(first, "спроси нейросеть: настройки quasar bridge", "Настройки доступны.", true, false)
+			e.RecordDelivered(first, "llm", "спроси нейросеть: настройки quasar bridge", "Настройки доступны.", true, false)
 			second := e.Prepare(ctx)
-			e.RecordDelivered(second, "спроси свою модель: какие настройки quasar bridge включены", "Не могу ответить.", true, false)
+			e.RecordDelivered(second, "llm", "спроси свою модель: какие настройки quasar bridge включены", "Не могу ответить.", true, false)
 			result, err := e.Resolve(ctx, "спроси нейросеть")
 			if err != nil || result.Answer != "Ответ." {
 				t.Fatalf("result=%+v err=%v", result, err)

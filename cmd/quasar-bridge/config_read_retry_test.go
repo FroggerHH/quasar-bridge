@@ -62,7 +62,7 @@ func TestConfigurationRetryUsesCurrentSettingsWithoutWrites(t *testing.T) {
 	e := &bridge.Engine{Configuration: true, LLM: noConfigurationCompleter{}, Assistant: a}
 	ctx := dialogue.WithSpeaker(t.Context(), "midi-config-retry")
 	seed := e.Prepare(ctx)
-	e.RecordDelivered(seed, "Какие у тебя есть утилиты для управления qwazar bridge", "У меня нет отдельных утилит.", true, false)
+	e.RecordDelivered(seed, "llm", "Какие у тебя есть утилиты для управления qwazar bridge", "У меня нет отдельных утилит.", true, false)
 	result, err := e.Resolve(ctx, "Спроси нейросеть")
 	if err != nil || result.Answer != "Контекст — 420 секунд." || modelCalls != 1 {
 		t.Fatalf("retry did not read configuration: result=%+v calls=%d err=%v", result, modelCalls, err)

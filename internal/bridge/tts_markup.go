@@ -18,6 +18,16 @@ var ttsMarkup = regexp.MustCompile(
 	`</?speaker(?:\s+[^<>]*)?/?>|` +
 		`\bsil\s*<\[\s*[0-9]+\s*\]>|\s*<\[\s*[a-z]+(?:\s+[a-z]+)*\s*\]>|\+([АЕЁИОУЫЭЮЯаеёиоуыэюя])`)
 
+// StripTTSMarkup removes synthesizer tags, pauses, phonemes and stress marks,
+// leaving the text as it appears on the speaker's card.
+func StripTTSMarkup(text string) string {
+	plain := ttsMarkup.ReplaceAllString(text, "$1")
+	if plain == text {
+		return text
+	}
+	return strings.Join(strings.Fields(plain), " ")
+}
+
 func (e *Engine) ttsInstructions() string {
 	if e.TTSMarkup {
 		return ttsMarkupPrompt

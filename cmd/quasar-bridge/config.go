@@ -52,6 +52,7 @@ type config struct {
 	HomeWarmArea        string                    `json:"home_warm_area"`
 	ListenAfterReply    bool                      `json:"listen_after_reply"`
 	Routing             bridge.RoutingConfig      `json:"routing"`
+	PostTurnHook        bridge.PostTurnHookConfig `json:"post_turn_hook"`
 }
 
 func readConfig(path string) (config, error) {
@@ -69,7 +70,7 @@ func readConfigForCommand(path string, modelOptional bool) (config, error) {
 }
 
 func parseConfig(raw []byte, modelOptional bool) (config, error) {
-	cfg := config{DialogueContext: dialogue.DefaultConfig(), Routing: bridge.DefaultRoutingConfig(), ConversationLog: journal.DefaultConfig(), AssistantTools: assistant.DefaultConfig(), LocalProgress: progressConfig{AfterMS: 2000, IntervalMS: 4000}, LLMAPI: "chat_completions", LLMMaxOutputTokens: 4096, ListenAfterReply: true, LLMStripPrefixes: bridge.DefaultStripPrefixes(), LLMModelRouting: bridge.DefaultModelRoutingConfig(), LLMTTSMarkup: true}
+	cfg := config{DialogueContext: dialogue.DefaultConfig(), Routing: bridge.DefaultRoutingConfig(), ConversationLog: journal.DefaultConfig(), AssistantTools: assistant.DefaultConfig(), LocalProgress: progressConfig{AfterMS: 2000, IntervalMS: 4000}, LLMAPI: "chat_completions", LLMMaxOutputTokens: 4096, ListenAfterReply: true, LLMStripPrefixes: bridge.DefaultStripPrefixes(), LLMModelRouting: bridge.DefaultModelRoutingConfig(), LLMTTSMarkup: true, PostTurnHook: bridge.DefaultPostTurnHookConfig()}
 	if json.Unmarshal(raw, &cfg, json.RejectUnknownMembers(true)) != nil {
 		return cfg, errors.New("invalid configuration JSON")
 	}
@@ -225,6 +226,9 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 		return cfg, err
 	}
 	if err := cfg.LLMModelRouting.Validate(); err != nil {
+		return cfg, err
+	}
+	if err := cfg.PostTurnHook.Validate(); err != nil {
 		return cfg, err
 	}
 	return cfg, nil

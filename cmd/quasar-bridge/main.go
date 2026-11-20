@@ -320,6 +320,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer logs.Close()
+	// Bound to the initial configuration: changing post_turn_hook needs a restart.
+	postTurnHook, err := bridge.NewPostTurnHook(cfg.PostTurnHook)
+	if err != nil {
+		slog.Error("post_turn_hook rejected", "error", err)
+		os.Exit(1)
+	}
+	defer postTurnHook.Close()
+	engine.PostTurnHook = postTurnHook
 	proxy.Journal = logs
 	if cfg.Mode == "hybrid" {
 		if hc != nil && cfg.HomeWarmArea != "" {
