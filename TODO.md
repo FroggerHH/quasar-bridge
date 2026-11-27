@@ -1,10 +1,12 @@
 # Deployment verification after the voice-harness port
 
-- [ ] Review and publish the integration branch into the fork's main branch.
-- [ ] Before installing, compare the live binary/configuration with the local
+- [x] Review and publish the integration branch into the fork's main branch.
+- [x] Before installing, compare the live binary/configuration with the local
   deployment inventory and preserve newer deployment changes.
-- [ ] Install the verified build and verify diagnostics on port 2704 with the
-  actual deployment configuration. Source tests do not verify the deployed service.
+- [x] Install the verified build and verify diagnostics on port 2704 with the
+  actual deployment configuration; verify access from another LAN host.
+- [x] Verify a synthetic LLM query through the deployed diagnostics API and
+  proactive speech through HA using the device's TTS-start and SPEAKING events.
 - [ ] Verify ordinary speaker speech and a home-control reply on the device;
   confirm playback events, not merely HTTP success.
 - [ ] Keep proactive notifications on the established HA path. Separately verify

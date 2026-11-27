@@ -91,4 +91,20 @@ with tests, `go vet`, the CGO-free build and indexed-tree scanner passed. A
 temporary standalone process accepted the diagnostics block together with the
 prompt file, disabled model routing and hook configuration, served HTML on port
 2704 and returned `status=ok` and `active_sessions=0`. It was stopped after the
-check. No live deployment or physical playback was changed or verified.
+check.
+
+Deployment on 2026-11-27: published `63469eb` to the fork's main branch and
+installed a CGO-free build identifying itself as `voice-harness-63469eb`. Binary
+SHA-256: `7e8483d6b060fa14128761fe9fe5b089c948ec8d4cc3d591edb632094654d3e3`.
+The current configuration was preserved, with only the diagnostics block added;
+the system prompt was unchanged. The prior binary, configuration and prompt were
+backed up on the deployment host before restart.
+
+The deployed panel and status API returned HTTP 200 from another LAN host. The
+speaker connected to the new Bridge. A synthetic diagnostics query routed through
+the external harness returned the requested two-word answer in 2268 ms. A separate
+HA text announcement was confirmed by the device's `onTtsStarted` and `SPEAKING`
+events with the synthetic text. This validates HA speech delivery, not a complete
+microphone-to-LLM-to-speaker conversation or the Bridge announcement endpoint.
+The HA notification path remains selected; the remaining device checks are in
+TODO.md.
