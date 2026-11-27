@@ -49,8 +49,25 @@ type Engine struct {
 	// StripPrefixes are model addresses removed only from outbound requests.
 	// An empty list disables stripping.
 	StripPrefixes []string
-	dialogueOnce  sync.Once
-	routing       atomic.Pointer[RoutingPolicy]
+	// PostTurnHook is notified of delivered llm and home turns. nil disables it;
+	// the owner closes it on shutdown.
+	PostTurnHook *PostTurnHook
+	dialogueOnce sync.Once
+	routing      atomic.Pointer[RoutingPolicy]
+	systemPrompt atomic.Pointer[string]
+	modelRouter  atomic.Pointer[ModelRouter]
+}
+
+func (e *Engine) SetSystemPrompt(prompt string) {
+	p := strings.TrimSpace(prompt)
+	e.systemPrompt.Store(&p)
+}
+
+func (e *Engine) activeSystemPrompt() string {
+	if p := e.systemPrompt.Load(); p != nil {
+		return *p
+	}
+	return strings.TrimSpace(e.SystemPrompt)
 }
 
 func (e *Engine) dialogue() *dialogue.Store {
@@ -218,7 +235,8 @@ func (e *Engine) Fallback(ctx context.Context, text string) (Resolution, error) 
 	if !e.dialogue().Current(ctx, ticket) {
 		return r, context.Canceled
 	}
-	system := e.SystemPrompt
+	ctx = e.withSelectedModel(ctx, text)
+	system := e.activeSystemPrompt()
 	if strings.TrimSpace(system) == "" {
 		system = defaultSystemPrompt
 	}

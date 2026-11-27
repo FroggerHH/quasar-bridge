@@ -72,6 +72,9 @@ func (c *configurationControl) saveChatGPTModel(ctx context.Context, expected, m
 	}
 	if model == expected {
 		c.active.LLMModel = model
+		if c.engine != nil {
+			c.engine.SetFastModel(model)
+		}
 		state.Active = model
 		return state, nil
 	}
@@ -95,6 +98,9 @@ func (c *configurationControl) saveChatGPTModel(ctx context.Context, expected, m
 		return nil, err
 	}
 	c.active.LLMModel = model
+	if c.engine != nil {
+		c.engine.SetFastModel(model)
+	}
 	state.Active, state.Saved = model, model
 	return state, nil
 }

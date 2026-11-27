@@ -16,6 +16,35 @@ func WithoutHostedTools(ctx context.Context) context.Context {
 	return context.WithValue(ctx, withoutHostedToolsKey{}, true)
 }
 
+type modelKey struct{}
+
+// WithModel selects the model for requests made with the returned context. The
+// Client is not modified, so concurrent requests may use different models. An
+// empty model leaves the context unchanged.
+func WithModel(ctx context.Context, model string) context.Context {
+	if model == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, modelKey{}, model)
+}
+
+// ModelFromContext returns the model selected by WithModel, or "" if none.
+func ModelFromContext(ctx context.Context) string {
+	model, _ := ctx.Value(modelKey{}).(string)
+	return model
+}
+
+// modelFor returns the per-request model override or the client's default.
+func (c *Client) modelFor(ctx context.Context) string {
+	if model := ModelFromContext(ctx); model != "" {
+		return model
+	}
+	if c.API == "chatgpt" && c.SubscriptionModel != nil {
+		return c.SubscriptionModel()
+	}
+	return c.Model
+}
+
 func (c *Client) responses(ctx context.Context, messages []Message, structured bool, tools []Tool) (Message, error) {
 	subscription := c.API == "chatgpt"
 	if subscription {
@@ -59,7 +88,7 @@ func (c *Client) responses(ctx context.Context, messages []Message, structured b
 		return Message{}, errors.New("invalid LLM output token budget")
 	}
 	request := map[string]any{
-		"model": c.Model, "input": input, "stream": false,
+		"model": c.modelFor(ctx), "input": input, "stream": false,
 		"store": false, "max_output_tokens": budget,
 		"include": []string{"reasoning.encrypted_content"},
 	}
@@ -67,9 +96,6 @@ func (c *Client) responses(ctx context.Context, messages []Message, structured b
 		request["reasoning"] = map[string]string{"effort": c.ReasoningEffort}
 	}
 	if subscription {
-		if c.SubscriptionModel != nil {
-			request["model"] = c.SubscriptionModel()
-		}
 		request["stream"] = true
 		delete(request, "max_output_tokens")
 	}

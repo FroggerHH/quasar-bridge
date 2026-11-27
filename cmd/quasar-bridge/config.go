@@ -30,32 +30,35 @@ type diagnosticsConfig struct {
 }
 
 type config struct {
-	AirPlay            airPlayConfig        `json:"airplay"`
-	Diagnostics        diagnosticsConfig    `json:"diagnostics"`
-	DialogueContext    dialogue.Config      `json:"dialogue_context"`
-	LocalProgress      progressConfig       `json:"local_progress"`
-	AssistantTools     assistant.Config     `json:"assistant_tools"`
-	ConversationLog    journal.Config       `json:"conversation_log"`
-	Listen             string               `json:"listen"`
-	Upstream           string               `json:"upstream"`
-	TLSCert            string               `json:"tls_cert"`
-	TLSKey             string               `json:"tls_key"`
-	AllowedIPs         []string             `json:"allowed_ips"`
-	Mode               string               `json:"mode"`
-	LLMBaseURL         string               `json:"llm_base_url"`
-	LLMSystemPrompt    string               `json:"llm_system_prompt,omitempty"`
-	LLMModel           string               `json:"llm_model"`
-	LLMAPI             string               `json:"llm_api"`
-	LLMChatGPTAuthFile string               `json:"llm_chatgpt_auth_file"`
-	LLMReasoningEffort string               `json:"llm_reasoning_effort"`
-	LLMMaxOutputTokens int                  `json:"llm_max_output_tokens"`
-	LLMHostedTools     []string             `json:"llm_hosted_tools"`
-	LLMChatParameters  map[string]any       `json:"llm_chat_parameters"`
-	LLMStripPrefixes   []string             `json:"llm_strip_prefixes"`
-	LLMTTSMarkup       bool                 `json:"llm_tts_markup"`
-	HomeWarmArea       string               `json:"home_warm_area"`
-	ListenAfterReply   bool                 `json:"listen_after_reply"`
-	Routing            bridge.RoutingConfig `json:"routing"`
+	Diagnostics         diagnosticsConfig         `json:"diagnostics"`
+	AirPlay             airPlayConfig             `json:"airplay"`
+	DialogueContext     dialogue.Config           `json:"dialogue_context"`
+	LocalProgress       progressConfig            `json:"local_progress"`
+	AssistantTools      assistant.Config          `json:"assistant_tools"`
+	ConversationLog     journal.Config            `json:"conversation_log"`
+	Listen              string                    `json:"listen"`
+	Upstream            string                    `json:"upstream"`
+	TLSCert             string                    `json:"tls_cert"`
+	TLSKey              string                    `json:"tls_key"`
+	AllowedIPs          []string                  `json:"allowed_ips"`
+	Mode                string                    `json:"mode"`
+	LLMBaseURL          string                    `json:"llm_base_url"`
+	LLMModel            string                    `json:"llm_model"`
+	LLMAPI              string                    `json:"llm_api"`
+	LLMChatGPTAuthFile  string                    `json:"llm_chatgpt_auth_file"`
+	LLMReasoningEffort  string                    `json:"llm_reasoning_effort"`
+	LLMMaxOutputTokens  int                       `json:"llm_max_output_tokens"`
+	LLMHostedTools      []string                  `json:"llm_hosted_tools"`
+	LLMChatParameters   map[string]any            `json:"llm_chat_parameters"`
+	LLMStripPrefixes    []string                  `json:"llm_strip_prefixes"`
+	LLMModelRouting     bridge.ModelRoutingConfig `json:"llm_model_routing"`
+	LLMTTSMarkup        bool                      `json:"llm_tts_markup"`
+	LLMSystemPrompt     string                    `json:"llm_system_prompt,omitempty"`
+	LLMSystemPromptFile string                    `json:"llm_system_prompt_file"`
+	HomeWarmArea        string                    `json:"home_warm_area"`
+	ListenAfterReply    bool                      `json:"listen_after_reply"`
+	Routing             bridge.RoutingConfig      `json:"routing"`
+	PostTurnHook        bridge.PostTurnHookConfig `json:"post_turn_hook"`
 }
 
 func readConfig(path string) (config, error) {
@@ -73,7 +76,8 @@ func readConfigForCommand(path string, modelOptional bool) (config, error) {
 }
 
 func parseConfig(raw []byte, modelOptional bool) (config, error) {
-	cfg := config{Diagnostics: diagnosticsConfig{Port: 2704}, DialogueContext: dialogue.DefaultConfig(), Routing: bridge.DefaultRoutingConfig(), ConversationLog: journal.DefaultConfig(), AssistantTools: assistant.DefaultConfig(), LocalProgress: progressConfig{AfterMS: 2000, IntervalMS: 4000}, LLMAPI: "chat_completions", LLMMaxOutputTokens: 4096, ListenAfterReply: true, LLMStripPrefixes: bridge.DefaultStripPrefixes(), LLMTTSMarkup: true}
+	cfg := config{DialogueContext: dialogue.DefaultConfig(), Routing: bridge.DefaultRoutingConfig(), ConversationLog: journal.DefaultConfig(), AssistantTools: assistant.DefaultConfig(), LocalProgress: progressConfig{AfterMS: 2000, IntervalMS: 4000}, LLMAPI: "chat_completions", LLMMaxOutputTokens: 4096, ListenAfterReply: true, LLMStripPrefixes: bridge.DefaultStripPrefixes(), LLMModelRouting: bridge.DefaultModelRoutingConfig(), LLMTTSMarkup: true, PostTurnHook: bridge.DefaultPostTurnHookConfig()}
+	cfg.Diagnostics.Port = 2704
 	if json.Unmarshal(raw, &cfg, json.RejectUnknownMembers(true)) != nil {
 		return cfg, errors.New("invalid configuration JSON")
 	}
@@ -226,10 +230,38 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 	if _, err := cfg.AirPlay.receiverConfig(); err != nil {
 		return cfg, err
 	}
+	if _, err := cfg.resolveSystemPrompt(); err != nil {
+		return cfg, err
+	}
 	if _, err := bridge.CompileRouting(cfg.Routing); err != nil {
 		return cfg, err
 	}
+	if err := cfg.LLMModelRouting.Validate(); err != nil {
+		return cfg, err
+	}
+	if err := cfg.PostTurnHook.Validate(); err != nil {
+		return cfg, err
+	}
 	return cfg, nil
+}
+func (c config) resolveSystemPrompt() (string, error) {
+	inline := strings.TrimSpace(c.LLMSystemPrompt)
+	file := strings.TrimSpace(c.LLMSystemPromptFile)
+	if inline != "" && file != "" {
+		return "", errors.New("llm_system_prompt and llm_system_prompt_file are mutually exclusive")
+	}
+	if file != "" {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			return "", errors.New("cannot read llm_system_prompt_file")
+		}
+		prompt := strings.TrimSpace(string(raw))
+		if prompt == "" {
+			return "", errors.New("llm_system_prompt_file is empty")
+		}
+		return prompt, nil
+	}
+	return inline, nil
 }
 func validEndpoint(raw string, schemes ...string) bool {
 	u, err := url.Parse(raw)

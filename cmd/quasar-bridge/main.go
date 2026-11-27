@@ -206,8 +206,17 @@ func main() {
 		}
 	}}
 	logs := new(journal.Writer)
+	sessions := new(bridge.SessionRegistry)
 	lc := newLLMClient(cfg, os.Getenv("QUASAR_LLM_API_KEY"))
-	engine := &bridge.Engine{LLM: lc, SystemPrompt: cfg.LLMSystemPrompt, Dialogue: dialogue.New(cfg.DialogueContext), StripPrefixes: cfg.LLMStripPrefixes, TTSMarkup: cfg.LLMTTSMarkup}
+	engine := &bridge.Engine{LLM: lc, Dialogue: dialogue.New(cfg.DialogueContext), StripPrefixes: cfg.LLMStripPrefixes, TTSMarkup: cfg.LLMTTSMarkup}
+	sysPrompt, err := cfg.resolveSystemPrompt()
+	if err != nil {
+		slog.Error("system prompt rejected", "error", err)
+		os.Exit(1)
+	}
+	if sysPrompt != "" {
+		engine.SetSystemPrompt(sysPrompt)
+	}
 	// Recovery is a direct command path, independent of assistant tool settings
 	// and of the availability of either the classifier or the dialogue model.
 	engine.Recovery = func(ctx context.Context, action string) (string, error) {
@@ -309,6 +318,10 @@ func main() {
 		slog.Error("routing rejected", "error", err)
 		os.Exit(1)
 	}
+	if err := engine.SetModelRouting(cfg.LLMModelRouting, cfg.LLMModel); err != nil {
+		slog.Error("llm_model_routing rejected", "error", err)
+		os.Exit(1)
+	}
 	if *query != "" || *check || *route != "" {
 		ctx, cancel := context.WithTimeout(ctx, 75*time.Second)
 		defer cancel()
@@ -350,6 +363,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer logs.Close()
+	// Bound to the initial configuration: changing post_turn_hook needs a restart.
+	postTurnHook, err := bridge.NewPostTurnHook(cfg.PostTurnHook)
+	if err != nil {
+		slog.Error("post_turn_hook rejected", "error", err)
+		os.Exit(1)
+	}
+	defer postTurnHook.Close()
+	engine.PostTurnHook = postTurnHook
 	proxy.Journal = logs
 	if cfg.Mode == "hybrid" {
 		if hc != nil && cfg.HomeWarmArea != "" {
@@ -374,11 +395,12 @@ func main() {
 			n := bridge.NewNative(ctx, up, down, engine)
 			n.GateText = false
 			n.ShouldListen = cfg.ListenAfterReply
+			n.TTSMarkup = cfg.LLMTTSMarkup
 			if cfg.LocalProgress.Enabled {
 				n.ProgressAfter = time.Duration(cfg.LocalProgress.AfterMS) * time.Millisecond
 				n.ProgressInterval = time.Duration(cfg.LocalProgress.IntervalMS) * time.Millisecond
 			}
-
+			sessions.Register(n)
 			return n
 		}
 	}
@@ -398,7 +420,7 @@ func main() {
 	var panel *diagnosticsListener
 	status := func() map[string]any {
 		state := engine.RoutingStatus()
-		return map[string]any{"status": "ok", "mode": cfg.Mode, "airplay": airPlayHealth(airPlay), "client_frames": clientCount.Load(), "server_frames": serverCount.Load(), "routing_revision": state.Revision, "routing_rules": state.ActiveRules, "routing_classifier_enabled": state.ClassifierEnabled, "routing_default_route": state.DefaultRoute, "conversation_log_enabled": logs.Enabled(), "conversation_log_failures": logs.Failures(), "assistant_tools_enabled": cfg.AssistantTools.Enabled, "dialogue_context_enabled": cfg.DialogueContext.Enabled && cfg.Mode == "hybrid", "home_assistant_enabled": hc != nil && cfg.Mode == "hybrid", "mcp_servers_configured": mcpConfigured, "music_playback_enabled": musicQueue != nil, "speaker_subscriptions": subscriptions.Snapshot()}
+		return map[string]any{"status": "ok", "mode": cfg.Mode, "airplay": airPlayHealth(airPlay), "client_frames": clientCount.Load(), "server_frames": serverCount.Load(), "routing_revision": state.Revision, "routing_rules": state.ActiveRules, "routing_classifier_enabled": state.ClassifierEnabled, "routing_default_route": state.DefaultRoute, "conversation_log_enabled": logs.Enabled(), "conversation_log_failures": logs.Failures(), "assistant_tools_enabled": cfg.AssistantTools.Enabled, "dialogue_context_enabled": cfg.DialogueContext.Enabled && cfg.Mode == "hybrid", "home_assistant_enabled": hc != nil && cfg.Mode == "hybrid", "mcp_servers_configured": mcpConfigured, "music_playback_enabled": musicQueue != nil, "speaker_subscriptions": subscriptions.Snapshot(), "active_sessions": sessions.Count()}
 	}
 	localSpeaker := readSpeakerInfo(*speakerConfig, "/proc/cmdline")
 	panelStatus := func() map[string]any {
@@ -430,6 +452,7 @@ func main() {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeDiagnosticJSON(w, http.StatusOK, status())
 	})
+	mux.HandleFunc("POST /internal/announce", announceHandler(sessions))
 	mux.Handle("/uni.ws", proxy)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(cfg.AllowedIPs) > 0 {

@@ -43,7 +43,7 @@ func TestSystemPromptAppliesToFollowupAndRetry(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			e.RecordDelivered(t.Context(), "следующий вопрос", "Answer", true, false)
+			e.RecordDelivered(t.Context(), "llm", "следующий вопрос", "Answer", true, false)
 			if result, err := e.Resolve(t.Context(), "используй нейросеть"); err != nil || result.Answer != "Answer" || calls != 3 {
 				t.Fatalf("retry failed: %+v, err=%v, calls=%d", result, err, calls)
 			}
@@ -81,7 +81,7 @@ func TestCustomSystemPromptPreservesTTSInstructions(t *testing.T) {
 					t.Errorf("synthesis markup enabled = %v, want %v", got, markup)
 				}
 			}
-			e.RecordDelivered(t.Context(), "следующий вопрос", "Answer", true, false)
+			e.RecordDelivered(t.Context(), "llm", "следующий вопрос", "Answer", true, false)
 			result, err := e.Resolve(t.Context(), "используй нейросеть")
 			if err != nil || result.Answer != "Answer" || calls != 3 {
 				t.Fatalf("retry = %+v, calls = %d, err = %v", result, calls, err)
@@ -144,8 +144,8 @@ func TestConfigurationRetryPreservesSystemPrompt(t *testing.T) {
 				e := &Engine{Configuration: true, SystemPrompt: prompt.text, TTSMarkup: markup, Assistant: reader,
 					LLM: completionFunc(func(context.Context, []llm.Message, bool) (string, error) { return `{"safe":true}`, nil })}
 				ctx := dialogue.WithSpeaker(t.Context(), "configuration-prompt")
-				e.RecordDelivered(ctx, "Расскажи о настройках quasar bridge", "Настройки доступны.", true, false)
-				e.RecordDelivered(ctx, "Какая модель в quasar bridge", "Не могу ответить.", true, false)
+				e.RecordDelivered(ctx, "llm", "Расскажи о настройках quasar bridge", "Настройки доступны.", true, false)
+				e.RecordDelivered(ctx, "llm", "Какая модель в quasar bridge", "Не могу ответить.", true, false)
 				result, err := e.Resolve(ctx, "используй нейросеть")
 				if err != nil || result.Route != "llm" || result.Answer != "The active model is fixture-model." || calls != 1 {
 					t.Fatalf("configuration retry failed: %+v, err=%v, calls=%d", result, err, calls)

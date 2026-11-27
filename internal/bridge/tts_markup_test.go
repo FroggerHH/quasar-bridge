@@ -31,7 +31,7 @@ func TestLLMTTSMarkupDisabled(t *testing.T) {
 		t.Fatalf("answer with markup disabled = %+v, err = %v", first, err)
 	}
 
-	engine.RecordDelivered(engine.Prepare(ctx), "Расскажи про замок шёпотом", "Не могу ответить.", true, false)
+	engine.RecordDelivered(engine.Prepare(ctx), "llm", "Расскажи про замок шёпотом", "Не могу ответить.", true, false)
 	retry, err := engine.Resolve(ctx, "Спроси нейросеть")
 	if err != nil || retry.Answer != plain || retry.speech != "" {
 		t.Fatalf("retry with markup disabled = %+v, err = %v", retry, err)

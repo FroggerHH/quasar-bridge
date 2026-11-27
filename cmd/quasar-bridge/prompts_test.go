@@ -109,8 +109,8 @@ func TestReadConfigSystemPromptEnvironmentOverride(t *testing.T) {
 	}
 }
 
-func TestReloadPromptsRequiresRestart(t *testing.T) {
-	for _, body := range []string{`{"llm_system_prompt":"custom"}`, `{"assistant_tools":{"system_prompt":"custom"}}`} {
+func TestReloadToolPromptRequiresRestart(t *testing.T) {
+	for _, body := range []string{`{"assistant_tools":{"system_prompt":"custom"}}`} {
 		path := configFile(t, `{}`)
 		initial, err := readConfig(path)
 		if err != nil {

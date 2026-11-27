@@ -12,7 +12,7 @@ import (
 
 func (n *Native) captureDelivered(p *nativeRequest, text string, final, action, local bool) {
 	recorder, ok := n.resolver.(interface {
-		RecordDelivered(context.Context, string, string, bool, bool)
+		RecordDelivered(context.Context, string, string, string, bool, bool)
 	})
 	if !ok {
 		return
@@ -22,10 +22,10 @@ func (n *Native) captureDelivered(p *nativeRequest, text string, final, action, 
 		n.mu.Unlock()
 		return
 	}
-	question, ctx := p.text, p.ctx
-	action = action || (p.route != "" && p.route != "llm" && p.route != "yandex")
+	question, ctx, route := p.text, p.ctx, p.route
+	action = action || (route != "" && route != "llm" && route != "yandex")
 	n.mu.Unlock()
-	recorder.RecordDelivered(ctx, question, text, final, action)
+	recorder.RecordDelivered(ctx, route, question, text, final, action)
 }
 func cloudResponseText(r *response.TAliceResponseProto) string {
 	if text := r.GetVoiceResponse().GetOutputSpeech().GetText(); text != "" {

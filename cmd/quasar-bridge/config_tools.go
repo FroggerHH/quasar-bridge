@@ -104,6 +104,9 @@ func requiresRestart(active, next config) bool {
 	active.Routing, next.Routing = bridge.RoutingConfig{}, bridge.RoutingConfig{}
 	active.ConversationLog, next.ConversationLog = journal.Config{}, journal.Config{}
 	active.Diagnostics.NetworkAccess, next.Diagnostics.NetworkAccess = false, false
+	active.LLMModelRouting, next.LLMModelRouting = bridge.ModelRoutingConfig{}, bridge.ModelRoutingConfig{}
+	active.LLMSystemPrompt, next.LLMSystemPrompt = "", ""
+	active.LLMSystemPromptFile, next.LLMSystemPromptFile = "", ""
 	return !reflect.DeepEqual(active, next)
 }
 
